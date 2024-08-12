@@ -1,6 +1,6 @@
 FROM apline
 
-WORKDIR /app
+WORKDIR /tmp
 
 COPY start.sh ./
 
