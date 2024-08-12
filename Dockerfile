@@ -5,7 +5,7 @@ WORKDIR /app
 COPY start.sh /app/
 
 RUN apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt install -y curl unzip jq openssl qrencode unzip tzdata && \
+    apt install -y curl unzip jq openssl && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
     chmod +x start.sh
