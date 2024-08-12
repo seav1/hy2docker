@@ -1,15 +1,1 @@
-Docker-bash
-
-````
-ENV UUID='feefeb96-bfcf-4a9b-aac0-6aac771c1b98'
-ENV NEZHA_SERVER='nz.seav.eu.org'
-ENV NEZHA_PORT='443'
-ENV NEZHA_KEY='kVo7QcDHVeVrdQsRM9'
-ENV ARGO_DOMAIN='cortexnodes.seav.eu.org' 
-ENV ARGO_AUTH='eyJhIjoiZjAzMGY1ZDg4OGEyYmRlN2NiMDg3NTU5MzM4ZjE0OTciLCJ0IjoiMTJiMDM3OTUtNTY3NC00OGU2LWI2MjAtMTkyNjI2NmRmMGRjIiwicyI6Ik5qY3pZMk16WWprdFlUaGlaUzAwTWpJNExUa3lPR0l0TmpFeFlqSmpabVkyTUdZdyJ9'
-ENV CFIP='time.cloudflare.com'
-ENV CFPORT='443'
-ENV NAME='vls'
-ENV FILE_PATH='./tmp'
-ENV ARGO_PORT='3000'
-````
+Docker-hy2
