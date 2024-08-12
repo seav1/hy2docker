@@ -1,11 +1,11 @@
 FROM alpine
 
-WORKDIR .
+WORKDIR /app
 
-COPY start.sh ./
+COPY start.sh /app/
 
 RUN apk update &&\
     apk add --no-cache openssl curl bash &&\
-    chmod 755 start.sh
+    chmod +x start.sh
     
 CMD ["./start.sh"]
