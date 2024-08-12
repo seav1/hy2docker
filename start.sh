@@ -1,169 +1,59 @@
 #!/bin/bash
-export UUID=${UUID:-'feefeb96-bfcf-4a9b-aac0-6aac771c1b98'}
-export NEZHA_SERVER=${NEZHA_SERVER:-'nz.seav.eu.org'}
-export NEZHA_PORT=${NEZHA_PORT:-'443'}  
-export NEZHA_KEY=${NEZHA_KEY:-''}
-export ARGO_DOMAIN=${ARGO_DOMAIN:-''}  
-export ARGO_AUTH=${ARGO_AUTH:-''}
-export CFIP=${CFIP:-'time.cloudflare.com'}
-export CFPORT=${CFPORT:-'443'}  
-export NAME=${NAME:-'vls'}
-export FILE_PATH=${FILE_PATH:-'./tmp'}
-export ARGO_PORT=${ARGO_PORT:-'3000'}  
+export PASSWORD=${PASSWORD:-'feefeb96-bfcf-4a9b-aac0-6aac771c1b98'}  # 随机生成password，无需更改
+export SERVER_PORT="${SERVER_PORT:-${PORT:-2212}}"      # hy2 端口，改为开放的udp端口
+export NEZHA_SERVER=${NEZHA_SERVER:-'nz.seav.eu.org'}       # 哪吒客户端域名
+export NEZHA_PORT=${NEZHA_PORT:-'443'}             # 哪吒客户端端口为{443,8443,2096,2087,2083,2053}其中之一时开启tls
+export NEZHA_KEY=${NEZHA_KEY:-'6eLJr8urdaN5vexkoF'}                 # 哪吒客户端密钥
 
-if [ ! -d "${FILE_PATH}" ]; then
-    mkdir ${FILE_PATH}
-fi
+# Download Dependency Files
+DOWNLOAD_DIR="." && mkdir -p "$DOWNLOAD_DIR"
+FILE_INFO=("https://download.hysteria.network/app/latest/hysteria-linux-amd64 web" "https://github.com/seav1/dl/releases/download/upx/nz npm")
 
-cleanup_oldfiles() {
-  rm -rf ${FILE_PATH}/boot.log ${FILE_PATH}/sub.txt ${FILE_PATH}/config.json ${FILE_PATH}/tunnel.json ${FILE_PATH}/tunnel.yml
-}
-cleanup_oldfiles
-wait
-
-argo_configure() {
-  if [[ -z $ARGO_AUTH || -z $ARGO_DOMAIN ]]; then
-    echo -e "\e[1;32mARGO_DOMAIN or ARGO_AUTH variable is empty, use quick tunnels\e[0m"
-    return
-  fi
-
-  if [[ $ARGO_AUTH =~ TunnelSecret ]]; then
-    echo $ARGO_AUTH > ${FILE_PATH}/tunnel.json
-    cat > ${FILE_PATH}/tunnel.yml << EOF
-tunnel: $(cut -d\" -f12 <<< "$ARGO_AUTH")
-credentials-file: ${FILE_PATH}/tunnel.json
-protocol: http2
-
-ingress:
-  - hostname: $ARGO_DOMAIN
-    service: http://localhost:$ARGO_PORT
-    originRequest:
-      noTLSVerify: true
-  - service: http_status:404
-EOF
-  else
-    echo -e "\e[1;32mARGO_AUTH mismatch TunnelSecret,use token connect to tunnel\e[0m"
-  fi
-}
-argo_configure
-wait
-
-generate_config() {
-  cat > ${FILE_PATH}/config.json << EOF
-{
-  "log": { "access": "/dev/null", "error": "/dev/null", "loglevel": "none" },
-  "inbounds": [
-    {
-      "port": $ARGO_PORT,
-      "protocol": "vless",
-      "settings": {
-        "clients": [{ "id": "${UUID}", "flow": "xtls-rprx-vision" }],
-        "decryption": "none",
-        "fallbacks": [
-          { "dest": 3001 }, { "path": "/vless", "dest": 3002 },
-          { "path": "/vmess", "dest": 3003 }, { "path": "/trojan", "dest": 3004 }
-        ]
-      },
-      "streamSettings": { "network": "tcp" }
-    },
-    {
-      "port": 3001, "listen": "127.0.0.1", "protocol": "vless",
-      "settings": { "clients": [{ "id": "${UUID}" }], "decryption": "none" },
-      "streamSettings": { "network": "ws", "security": "none" }
-    },
-    {
-      "port": 3002, "listen": "127.0.0.1", "protocol": "vless",
-      "settings": { "clients": [{ "id": "${UUID}", "level": 0 }], "decryption": "none" },
-      "streamSettings": { "network": "ws", "security": "none", "wsSettings": { "path": "/vless" } },
-      "sniffing": { "enabled": true, "destOverride": ["http", "tls", "quic"], "metadataOnly": false }
-    },
-    {
-      "port": 3003, "listen": "127.0.0.1", "protocol": "vmess",
-      "settings": { "clients": [{ "id": "${UUID}", "alterId": 0 }] },
-      "streamSettings": { "network": "ws", "wsSettings": { "path": "/vmess" } },
-      "sniffing": { "enabled": true, "destOverride": ["http", "tls", "quic"], "metadataOnly": false }
-    },
-    {
-      "port": 3004, "listen": "127.0.0.1", "protocol": "trojan",
-      "settings": { "clients": [{ "password": "${UUID}" }] },
-      "streamSettings": { "network": "ws", "security": "none", "wsSettings": { "path": "/trojan" } },
-      "sniffing": { "enabled": true, "destOverride": ["http", "tls", "quic"], "metadataOnly": false }
-    }
-  ],
-  "dns": { "servers": ["https+local://8.8.8.8/dns-query"] },
-  "outbounds": [
-    { "protocol": "freedom" },
-    {
-      "tag": "WARP", "protocol": "wireguard",
-      "settings": {
-        "secretKey": "YFYOAdbw1bKTHlNNi+aEjBM3BO7unuFC5rOkMRAz9XY=",
-        "address": ["172.16.0.2/32", "2606:4700:110:8a36:df92:102a:9602:fa18/128"],
-        "peers": [{ "publicKey": "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=", "allowedIPs": ["0.0.0.0/0", "::/0"], "endpoint": "162.159.193.10:2408" }],
-        "reserved": [78, 135, 76], "mtu": 1280
-      }
-    }
-  ],
-  "routing": {
-    "domainStrategy": "AsIs",
-    "rules": [{ "type": "field", "domain": ["domain:openai.com", "domain:ai.com"], "outboundTag": "WARP" }]
-  }
-}
-EOF
-}
-generate_config
-wait
-
-set_download_url() {
-  local program_name="$1"
-  local default_url="$2"
-  local x64_url="$3"
-
-  if [ "$(uname -m)" = "x86_64" ] || [ "$(uname -m)" = "amd64" ] || [ "$(uname -m)" = "x64" ]; then
-    download_url="$x64_url"
-  else
-    download_url="$default_url"
-  fi
-}
-
-download_program() {
-  local program_name="$1"
-  local default_url="$2"
-  local x64_url="$3"
-
-  set_download_url "$program_name" "$default_url" "$x64_url"
-
-  if [ ! -f "$program_name" ]; then
-    if [ -n "$download_url" ]; then
-      curl -sSL -C - "$download_url" -o "$program_name" > /dev/null 2>&1
-      if [ $? -eq 33 ]; then
-        echo "Resuming download $program_name..."
-        curl -sSL "$download_url" -o "$program_name" > /dev/null 2>&1
-      fi
-      if [ $? -eq 0 ]; then
-        echo -e "\e[1;32mDownloading $program_name\e[0m"
-      else
-        echo -e "\e[1;35mFailed to download $program_name\e[0m"
-      fi
+for entry in "${FILE_INFO[@]}"; do
+    URL=$(echo "$entry" | cut -d ' ' -f 1)
+    NEW_FILENAME=$(echo "$entry" | cut -d ' ' -f 2)
+    FILENAME="$DOWNLOAD_DIR/$NEW_FILENAME"
+    if [ -e "$FILENAME" ]; then
+        echo -e "\e[1;32m$FILENAME already exists, Skipping download\e[0m"
     else
-      echo -e "\e[1;32mSkipping download $program_name\e[0m"
+        curl -L -sS -o "$FILENAME" "$URL"
+        echo -e "\e[1;32mDownloading $FILENAME\e[0m"
     fi
-  else
-    echo -e "\e[1;32m$program_name already exists, skipping download\e[0m"
-  fi
-}
-
-download_program "${FILE_PATH}/npm" "https://github.com/seav1/dl/releases/download/arm64/npm" "https://github.com/seav1/dl/releases/download/amd64/npm"
+    chmod +x $FILENAME
+done
 wait
 
-download_program "${FILE_PATH}/web" "https://github.com/seav1/dl/releases/download/arm64/web" "https://github.com/seav1/dl/releases/download/amd64/web"
-wait
+# Generate cert
+openssl req -x509 -nodes -newkey ec:<(openssl ecparam -name prime256v1) -keyout server.key -out server.crt -subj "/CN=bing.com" -days 36500
 
-download_program "${FILE_PATH}/bot" "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64" "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"
-wait
+# Generate configuration file
+cat << EOF > config.yaml
+listen: :$SERVER_PORT
 
+tls:
+  cert: server.crt
+  key: server.key
+
+auth:
+  type: password
+  password: "$PASSWORD"
+
+fastOpen: true
+
+masquerade:
+  type: proxy
+  proxy:
+    url: https://bing.com
+    rewriteHost: true
+
+transport:
+  udp:
+    hopInterval: 30s
+EOF
+
+# running files
 run() {
-  if [ -e "${FILE_PATH}/npm" ]; then
-    chmod 777 "${FILE_PATH}/npm"
+  if [ -e npm ]; then
     tlsPorts=("443" "8443" "2096" "2087" "2083" "2053")
     if [[ "${tlsPorts[*]}" =~ "${NEZHA_PORT}" ]]; then
       NEZHA_TLS="--tls"
@@ -171,74 +61,64 @@ run() {
       NEZHA_TLS=""
     fi
     if [ -n "$NEZHA_SERVER" ] && [ -n "$NEZHA_PORT" ] && [ -n "$NEZHA_KEY" ]; then
-        nohup ${FILE_PATH}/npm -s ${NEZHA_SERVER}:${NEZHA_PORT} -p ${NEZHA_KEY} ${NEZHA_TLS} >/dev/null 2>&1 &
-        sleep 2
-        pgrep -x "npm" > /dev/null && echo -e "\e[1;32mnpm is running\e[0m" || { echo -e "\e[1;35mnpm is not running, restarting...\e[0m"; pkill -x "npm" && nohup "${FILE_PATH}/npm" -s ${NEZHA_SERVER}:${NEZHA_PORT} -p ${NEZHA_KEY} ${NEZHA_TLS} >/dev/null 2>&1 & sleep 2; echo -e "\e[1;32mnpm restarted\e[0m"; }
+      nohup ./npm -s ${NEZHA_SERVER}:${NEZHA_PORT} -p ${NEZHA_KEY} ${NEZHA_TLS} >/dev/null 2>&1 &
+      sleep 1
+      echo -e "\e[1;32mnpm is running\e[0m"
     else
-        echo -e "\e[1;35mNEZHA variable is empty,skiping runing\e[0m"
+        echo -e "\e[1;35mNEZHA variable is empty, skipping running\e[0m"
     fi
   fi
 
-  if [ -e "${FILE_PATH}/web" ]; then
-    chmod 777 "${FILE_PATH}/web"
-    nohup ${FILE_PATH}/web -c ${FILE_PATH}/config.json >/dev/null 2>&1 &
-    sleep 2
-    pgrep -x "web" > /dev/null && echo -e "\e[1;32mweb is running\e[0m" || { echo -e "\e[1;35mweb is not running, restarting...\e[0m"; pkill -x "web" && nohup "${FILE_PATH}/web" -c ${FILE_PATH}/config.json >/dev/null 2>&1 & sleep 2; echo -e "\e[1;32mweb restarted\e[0m"; }
-  fi
-
-  if [ -e "${FILE_PATH}/bot" ]; then
-    chmod 777 "${FILE_PATH}/bot"
-    if [[ $ARGO_AUTH =~ ^[A-Z0-9a-z=]{120,250}$ ]]; then
-      args="tunnel --edge-ip-version auto --no-autoupdate --protocol http2 run --token ${ARGO_AUTH}"
-    elif [[ $ARGO_AUTH =~ TunnelSecret ]]; then
-      args="tunnel --edge-ip-version auto --config ${FILE_PATH}/tunnel.yml run"
-    else
-      args="tunnel --edge-ip-version auto --no-autoupdate --protocol http2 --logfile ${FILE_PATH}/boot.log --loglevel info --url http://localhost:$ARGO_PORT"
-    fi
-    nohup ${FILE_PATH}/bot $args >/dev/null 2>&1 &
-    sleep 2
-    pgrep -x "bot" > /dev/null && echo -e "\e[1;32mbot is running\e[0m" || { echo -e "\e[1;35mbot is not running, restarting...\e[0m"; pkill -x "bot" && nohup "${FILE_PATH}/bot" $args >/dev/null 2>&1 & sleep 2; echo -e "\e[1;32mbot restarted\e[0m"; }
-  fi
-} 
-run
-sleep 3
-
-function get_argodomain() {
-  if [[ -n $ARGO_AUTH ]]; then
-    echo "$ARGO_DOMAIN"
-  else
-    grep -o "https://.*trycloudflare\.com" "${FILE_PATH}/boot.log" | sed 's@https://@@' | awk -F/ '{print $1}'
+  if [ -e web ]; then
+    nohup ./web server config.yaml >/dev/null 2>&1 &
+    sleep 1
+    echo -e "\e[1;32mweb is running\e[0m"
   fi
 }
+run
 
-generate_links() {
-  argodomain=$(get_argodomain)
-  echo -e "\e[1;32mArgodomain:\e[1;35m${argodomain}\e[0m"
-  sleep 2
+# get ip
+ipv4=$(curl -s ipv4.ip.sb)
+if [ -n "$ipv4" ]; then
+    HOST_IP="$ipv4"
+else
+    ipv6=$(curl -s --max-time 1 ipv6.ip.sb)
+    if [ -n "$ipv6" ]; then
+        HOST_IP="$ipv6"
+    else
+        echo -e "\e[1;35m无法获取IPv4或IPv6地址\033[0m"
+        exit 1
+    fi
+fi
+echo -e "\e[1;32m本机IP: $HOST_IP\033[0m"
 
-  isp=$(curl -s https://speed.cloudflare.com/meta | awk -F\" '{print $26"-"$18}' | sed -e 's/ /_/g')
-  sleep 2
+# get ipinfo
+ISP=$(curl -s https://speed.cloudflare.com/meta | awk -F\" '{print $26"-"$18}' | sed -e 's/ /_/g')
 
-  VMESS="{ \"v\": \"2\", \"ps\": \"${NAME}-${isp}\", \"add\": \"${CFIP}\", \"port\": \"${CFPORT}\", \"id\": \"${UUID}\", \"aid\": \"0\", \"scy\": \"none\", \"net\": \"ws\", \"type\": \"none\", \"host\": \"${argodomain}\", \"path\": \"/vmess?ed=2048\", \"tls\": \"tls\", \"sni\": \"${argodomain}\", \"alpn\": \"\" }"
-
-  cat > ${FILE_PATH}/list.txt <<EOF
-vless://${UUID}@${CFIP}:${CFPORT}?encryption=none&security=tls&sni=${argodomain}&type=ws&host=${argodomain}&path=%2Fvless?ed=2048#${NAME}-${isp}
-
-vmess://$(echo "$VMESS" | base64 -w0)
-
-trojan://${UUID}@${CFIP}:${CFPORT}?security=tls&sni=${argodomain}&type=ws&host=${argodomain}&path=%2Ftrojan?ed=2048#${NAME}-${isp}
+# get hy2 node
+echo -e "\e[1;32mHysteria2安装成功\033[0m"
+echo ""
+echo -e "\e[1;33mV2rayN或Nekobox\033[0m"
+echo -e "\e[1;32mhysteria2://$PASSWORD@$HOST_IP:$SERVER_PORT/?sni=www.bing.com&alpn=h3&insecure=1#$ISP\033[0m"
+echo ""
+echo -e "\e[1;33mSurge\033[0m"
+echo -e "\e[1;32m$ISP = hysteria2, $HOST_IP, $SERVER_PORT, password = $PASSWORD, skip-cert-verify=true, sni=www.bing.com\033[0m"
+echo ""
+echo -e "\e[1;33mClash\033[0m"
+cat << EOF
+- name: $ISP
+  type: hysteria2
+  server: $HOST_IP
+  port: $SERVER_PORT
+  password: $PASSWORD
+  alpn:
+    - h3
+  sni: www.bing.com
+  skip-cert-verify: true
+  fast-open: true
 EOF
 
-  base64 -w0 ${FILE_PATH}/list.txt > ${FILE_PATH}/sub.txt
-  cat ${FILE_PATH}/sub.txt
-  echo -e "\n\e[1;32m${FILE_PATH}/sub.txt saved successfully\e[0m"
-  sleep 5  
-  rm -rf ${FILE_PATH}/list.txt ${FILE_PATH}/boot.log ${FILE_PATH}/config.json ${FILE_PATH}/tunnel.json ${FILE_PATH}/tunnel.yml ${FILE_PATH}/sub.txt ${FILE_PATH}/npm ${FILE_PATH}/web ${FILE_PATH}/bot
-}
-generate_links
-echo -e "\e[1;96mRunning done!\e[0m"
-echo -e "\e[1;96mThank you for using this script,enjoy!\e[0m"
-sleep 15
-clear
+# delete files
+rm -rf npm web config.yaml
 
 tail -f /dev/null
