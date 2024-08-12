@@ -121,4 +121,4 @@ EOF
 # delete files
 rm -rf npm web config.yaml
 
-tail -f /dev/null
+exit 0
