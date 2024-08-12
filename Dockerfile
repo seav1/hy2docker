@@ -1,11 +1,11 @@
-FROM alpine
+FROM debian
 
-WORKDIR /tmp
+WORKDIR tmp
 
 COPY start.sh ./
 
-RUN apk update &&\
-    apk add --no-cache bash &&\
+RUN apt-get update &&\
+    apt-get install -y wget unzip iproute2 &&\
     chmod 755 start.sh
 
 CMD ["./start.sh"]
